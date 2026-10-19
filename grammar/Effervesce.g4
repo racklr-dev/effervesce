@@ -1,13 +1,12 @@
 grammar Effervesce;
 
-// Effervesce is a language-agnostic language for describing a system as typed
-// effects (capabilities), handlers (interpretations), components (consumers),
-// state, transitions, invariants, and policies. One description drives three
-// checkers:
+// Effervesce describes a system as typed effects (capabilities), how they are
+// provided (given / via), who consumes them (components), and the rules that
+// must hold (always / never / must). One description drives three checkers:
 //
-//   - type check  : every used effect is handled (effect-row soundness)
-//   - model check : invariants hold over reachable states
-//   - policy check: forbid/require predicates over the description hold
+//   - type check  : every used capability is handled (effect-row soundness)
+//   - model check : every `always` invariant holds over reachable states
+//   - policy check: every `never` / `must` predicate holds over the description
 //
 // The language is check-only. Execution is a later, optional adaptor.
 
@@ -16,55 +15,50 @@ system
     ;
 
 decl
-    : effectDecl
+    : capabilityDecl
+    | givenDecl
     | handlerDecl
     | componentDecl
-    | assumeDecl
     | stateDecl
     | actionDecl
     | invariantDecl
     | policyDecl
     ;
 
-// ── Capabilities ───────────────────────────────────────────────────
+// ── Capabilities (typed effects) ──────────────────────────────────
+//
+// A capability is a typed effect: a named thing your system can ask for, with
+// typed operations. `Read<A>` is a capability family over A.
 
-// A named capability with typed operations. `Read<A>` is a capability family
-// parameterized by A.
-effectDecl
-    : 'effect' ID typeParams? '{' opDecl* '}'
+capabilityDecl
+    : 'capability' ID typeParams? '{' opDecl* '}'
     ;
 
 opDecl
-    : ID '(' params? ')' '->' type_ ';'?
+    : ID '(' params? ')' ('->' type_)? ';'?
     ;
 
-// ── Components ─────────────────────────────────────────────────────
+// ── Wiring: who provides what ─────────────────────────────────────
+
+// The environment provides these capabilities directly (terminal).
+givenDecl
+    : 'given' effectRow ';'?
+    ;
+
+// `E via R` interprets capability E in terms of the row R. The redundant
+// handler name is gone; the capability being handled is the name.
+handlerDecl
+    : effectRef 'via' effectRow? '{' opImpl* '}'
+    ;
 
 // A component consumes an effect row and exposes typed operations. Its body
-// invokes effects; the type checker verifies every invocation is in `uses`.
+// invokes effects; the type checker verifies every invocation is in `needs`.
 componentDecl
-    : 'component' ID '{' ('uses' effectRow)? opBody* '}'
-    ;
-
-opBody
-    : 'op' ID '(' params? ')' '->' type_ '=' block
-    ;
-
-// ── Handlers ───────────────────────────────────────────────────────
-
-// A handler interprets one effect in terms of a (possibly empty) effect row.
-// An empty row means the handler is terminal: nothing further is required.
-handlerDecl
-    : 'handler' ID ':' effectRef '=>' effectRow? '{' opImpl* '}'
+    : 'component' ID 'needs' effectRow? '{' opImpl* '}'
     ;
 
 opImpl
-    : ID '(' paramNames? ')' '=' block
-    ;
-
-// A capability the environment provides directly (terminal by fiat).
-assumeDecl
-    : 'assume' '{' effectRow '}' ';'?
+    : ID '(' params? ')' ('->' type_)? '=' body
     ;
 
 // ── State and transitions (model checking) ────────────────────────
@@ -82,18 +76,18 @@ step
     | expr ';'?             // effect invocation
     ;
 
+// A property that must hold in every reachable state.
 invariantDecl
-    : 'invariant' ID '{' expr '}'
+    : 'always' expr ';'?
     ;
 
-// ── Policies (predicates over the description) ─────────────────────
-
+// A rule over the description itself: `never` forbids, `must` requires.
 policyDecl
-    : 'policy' ID '{' ('forbid' | 'require') predicate ';' '}'
+    : ('never' | 'must') predicate ';'?
     ;
 
 predicate
-    : 'component' 'uses' effectRef       // component uses X
+    : 'component' 'needs' effectRef       // component needs X
     | 'not' predicate
     | predicate 'and' predicate
     | predicate 'or' predicate
@@ -124,14 +118,19 @@ type_
     ;
 
 params
-    : ID ':' type_ (',' ID ':' type_)*
+    : param (',' param)*
     ;
 
-paramNames
-    : ID (',' ID)*
+param
+    : ID (':' type_)?
     ;
 
 // ── Expressions (minimal; the first checker treats these as opaque) ─
+
+body
+    : expr            // a single operation needs no braces
+    | block           // several operations need braces
+    ;
 
 block
     : '{' expr (';' expr)* ';'? '}'

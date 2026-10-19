@@ -1,0 +1,44 @@
+system ConfigReader {
+
+  capability Read<A> {
+    get() -> A
+  }
+
+  capability Audit {
+    log(msg: String) -> Unit
+  }
+
+  capability Log {
+    write(msg: String) -> Unit
+  }
+
+  // The outside world gives us files and logs for free.
+  given Fs, Log
+
+  // Audit is done with Log.
+  Audit via Log {
+    log(msg) = write("[audit] " + msg)
+  }
+
+  // Reading a config is done with the filesystem.
+  Read<Config> via Fs {
+    get() = parse(readFile("config.toml"))
+  }
+
+  component LoadConfig needs Read<Config>, Audit {
+    getConfig() -> Config = {
+      log("loading config");
+      parse(get())
+    }
+  }
+
+  state cache: Config = defaultConfig()
+
+  action Load {
+    cache := readConfig()
+  }
+
+  always cache.port > 0
+
+  never component needs Read and not component needs Audit
+}

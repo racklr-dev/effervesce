@@ -1,0 +1,14 @@
+// The effect vocabulary: what a TODO app can ask for.
+// Nothing here says HOW a store or notifier works, only what operations exist.
+system TodoStore {
+
+  capability Store {
+    list() -> List<Todo>
+    add(text: String) -> Todo
+    done(id: String) -> Todo
+  }
+
+  capability Notify {
+    tell(message: String) -> Unit
+  }
+}

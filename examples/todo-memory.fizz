@@ -1,0 +1,22 @@
+// Interpretation 1: the store is handed to us, ready to use.
+// The App component only needs Store and Notify; it never sees how they work.
+system TodoMemory {
+
+  capability Store {
+    add(text: String) -> Todo
+    done(id: String) -> Todo
+  }
+
+  capability Notify {
+    tell(message: String) -> Unit
+  }
+
+  given Store, Notify
+
+  component App needs Store, Notify {
+    addTodo(text) = {
+      add(text);
+      tell("added " + text)
+    }
+  }
+}

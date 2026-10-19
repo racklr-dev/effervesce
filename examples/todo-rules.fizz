@@ -1,0 +1,37 @@
+// The same system, with the rules made explicit.
+// This exercises all three checkers at once:
+//   type check  : App needs Store and Notify, both given
+//   model check : `always` holds after the AddTodo action
+//   policy check: the `never` / `must` rules over the description
+system TodoRules {
+
+  capability Store {
+    add(text: String) -> Todo
+    done(id: String) -> Todo
+  }
+
+  capability Notify {
+    tell(message: String) -> Unit
+  }
+
+  given Store, Notify
+
+  component App needs Store, Notify {
+    addTodo(text) = {
+      add(text);
+      tell("added " + text)
+    }
+  }
+
+  state lastAdded: Todo = none
+
+  action AddTodo {
+    lastAdded := add("buy milk")
+  }
+
+  always lastAdded.text == "buy milk"
+
+  must component needs Notify
+
+  never component needs Store and not component needs Notify
+}

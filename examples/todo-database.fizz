@@ -1,0 +1,26 @@
+// Interpretation 2: the SAME Store effect, now layered on a database.
+// The App component is identical to todo-memory.fizz — only the wiring changed.
+system TodoDatabase {
+
+  capability Store {
+    add(text: String) -> Todo
+    done(id: String) -> Todo
+  }
+
+  capability Db {
+    insert(text: String) -> Unit
+    mark_done(id: String) -> Unit
+  }
+
+  given Db
+
+  // Store is not primitive here: it is interpreted in terms of Db.
+  Store via Db {
+    add(text) = insert(text)
+    done(id) = mark_done(id)
+  }
+
+  component App needs Store {
+    addTodo(text) = add(text)
+  }
+}
