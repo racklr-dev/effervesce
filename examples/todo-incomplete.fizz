@@ -1,0 +1,21 @@
+// The same TODO app with a hole: App needs Notify, but nothing provides it.
+// `check()` reports the unhandled capability.
+system TodoIncomplete {
+
+  capability Store {
+    add(text: String) -> Todo
+  }
+
+  capability Notify {
+    tell(message: String) -> Unit
+  }
+
+  given Store
+
+  component App needs Store, Notify {
+    addTodo(text) = {
+      add(text);
+      tell("added " + text)
+    }
+  }
+}

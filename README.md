@@ -37,17 +37,46 @@ See `examples/config-reader.fizz` for all of it in one small system.
 
 ## The checkers
 
-The first milestone is the type checker. It walks the capability graph and
-answers one question: is every capability a component needs handled, directly
-or transitively, down to something `given`? Handler completeness falls out of
-the same walk: a `via` clause for E must implement every operation E declares.
+`check()` runs three checks and returns one verdict:
 
-The second milestone adds the model checker and the policy evaluator. The
-model checker explores reachable states and verifies each `always` invariant.
-The policy evaluator checks every `never` and `must` predicate over the
-description.
+- **Type check.** Walks the capability graph: is every capability a component
+  needs handled, directly or transitively, down to something `given`?
+- **Policy check.** Evaluates every `never` and `must` predicate over the
+  description (`component needs X`, `not`, `and`, `or`).
+- **Model check.** Verifies state safety (unique states, declared assignment
+  targets, declared invariant references) and attempts to discharge each
+  `always` invariant. Invariants that reference uninterpreted capability
+  operations are reported as unverified, not silently passed.
+
+## Run
+
+`check()` is a Racket library; the front end lives in racklr, which must be
+installed as a linked package. Link this repo the same way, then run the CLI:
+
+```
+raco pkg install --link /path/to/effervesce
+racket /path/to/effervesce/main.rkt /path/to/effervesce/examples/todo-incomplete.fizz
+```
+
+The CLI prints each finding, a final `ok` / `failed` line, and exits non-zero
+on failure:
+
+```
+  unhandled capability: component App needs Notify
+examples/todo-incomplete.fizz: failed
+```
+
+## The examples
+
+- `todo-store.fizz` — the capability vocabulary.
+- `todo-memory.fizz` — capabilities handed over directly (`given`).
+- `todo-database.fizz` — the same `Store` interpreted `via` `Db`.
+- `todo-rules.fizz` — invariants and policies exercising all three checkers.
+- `todo-incomplete.fizz` — a deliberate hole: `Notify` is needed but never provided.
 
 ## Status
 
-Grammar sketch, worked example, and design notes. No checker is implemented
-yet.
+Front end (grammar, lowering, emit) and all three checkers are implemented,
+with round-trip and checker tests green. Model checking is MVP-depth:
+invariants over uninterpreted capabilities are reported as unverified until
+capability interpretations land.
