@@ -1,0 +1,49 @@
+system ConfigReader {
+
+  effect Read<A> {
+    get() -> A
+  }
+
+  effect Audit {
+    log(msg: String) -> Unit
+  }
+
+  effect Log {
+    write(msg: String) -> Unit
+  }
+
+  // The environment provides filesystem and logging directly.
+  assume { Fs, Log }
+
+  // Audit is implemented on top of Log.
+  handler ToLog : Audit => Log {
+    log(msg) = { write("[audit] " + msg) }
+  }
+
+  // Read<Config> is implemented on top of Fs.
+  handler FromFile : Read<Config> => Fs {
+    get() = { parse(readFile("config.toml")) }
+  }
+
+  component LoadConfig {
+    uses Read<Config>, Audit
+    op getConfig() -> Config = {
+      log("loading config");
+      parse(get())
+    }
+  }
+
+  state cache: Config = defaultConfig()
+
+  action Load {
+    cache := readConfig()
+  }
+
+  invariant validConfig {
+    cache.port > 0
+  }
+
+  policy noSilentReads {
+    forbid component uses Read and not component uses Audit;
+  }
+}
