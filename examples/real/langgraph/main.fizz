@@ -1,0 +1,16 @@
+// A LangGraph workflow, described in Effervesce.
+//
+// The bridge checker infers `llm` from the `langgraph` namespace (a graph of
+// LLM-backed nodes) and checks it against `Workflow needs Llm`.
+system LangGraphWorkflow {
+
+  capability Llm {
+    complete(prompt: String) -> String
+  }
+
+  given Llm
+
+  component Workflow needs Llm {
+    run() = complete("hi")
+  }
+}

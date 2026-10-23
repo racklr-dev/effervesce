@@ -31,6 +31,7 @@ It is check-only. Running it is a later, optional adaptor.
 - `given Fs, Log` says the outside world provides these directly.
 - `Read<Config> via Fs { ... }` interprets one capability in terms of another.
 - `component LoadConfig needs Read<Config>, Audit { ... }` declares a consumer.
+- A component can also `provides X` to satisfy a concurrent peer's `needs X`.
 - `always`, `never`, and `must` state the rules the checkers enforce.
 
 See `examples/config-reader.fizz` for all of it in one small system.
@@ -40,13 +41,23 @@ See `examples/config-reader.fizz` for all of it in one small system.
 `check()` runs three checks and returns one verdict:
 
 - **Type check.** Walks the capability graph: is every capability a component
-  needs handled, directly or transitively, down to something `given`?
+  needs handled, directly or transitively, down to something `given`? A
+  capability may also be satisfied by a peer component that `provides` it, so
+  concurrent components compose. Also verifies that each component body only
+  invokes operations its `needs` covers, and that a provider implements every
+  operation of each capability it provides.
 - **Policy check.** Evaluates every `never` and `must` predicate over the
   description (`component needs X`, `not`, `and`, `or`).
 - **Model check.** Verifies state safety (unique states, declared assignment
-  targets, declared invariant references) and attempts to discharge each
-  `always` invariant. Invariants that reference uninterpreted capability
-  operations are reported as unverified, not silently passed.
+  targets, declared invariant references) and explores reachable states from
+  `:=` transitions to discharge each `always` invariant. A failing invariant
+  is a violation; one that stays over uninterpreted capability operations is
+  reported as unverified, not silently passed.
+- **Bridge check.** Infers the effect rows of real host code (Python today)
+  with `racklr/effects/infer` and compares them against each component's
+  `needs` through a capability-interpretation table (capability name -> allowed
+  effect names). A performed effect no declared need covers is a violation; an
+  unresolvable call is reported unverified, not silently passed.
 
 ## Run
 
@@ -66,17 +77,75 @@ on failure:
 examples/todo-incomplete.fizz: failed
 ```
 
+The CLI also has two reasoning modes: `ask` for fast closed-form questions
+(System 1) and `verify` for the exact four-checker pass (System 2):
+
+```
+racket main.rkt ask examples/todo-peer.fizz capabilities-of App
+# Store [certain]
+
+racket main.rkt ask examples/todo-peer.fizz reachable? Store
+# yes [certain]
+
+racket main.rkt verify examples/config-reader.fizz
+#   [model:invariant-unverified] invariant unverified (...)
+# examples/config-reader.fizz: ok
+```
+
+## The library
+
+The whole thing is three verbs. `(require effervesce/library)` and:
+
+```racket
+#lang racket
+(require effervesce/library)
+
+(define spec "system S { ... }")
+
+;; System 1: index the description and ask fast questions.
+(define idx (analyze spec))
+(ask idx '(capabilities-of "App"))      ; => (answer '((Store)) 'certain #f)
+(ask idx '(reachable? ("Store")))       ; => (answer #t 'certain #f)
+
+;; System 2: escalate to the exact checkers.
+(define findings (verify spec))
+(verify-ok? findings)                   ; => #t
+```
+
+- `analyze` turns `.fizz` text into an indexed typed hypergraph.
+- `ask` answers closed-form questions with a `certain` / `unknown` tag. It
+  never guesses: an answer it cannot compute is `unknown`, which is the signal
+  to escalate.
+- `verify` runs type, policy, model, and bridge checks and returns one
+  structured `finding` list. A `hard` finding fails verification; a `note`
+  (an invariant the model checker could not discharge) does not.
+
+A binary artifact front end (BAP) is planned so the same three verbs work on
+compiled programs, not just `.fizz` source; see
+`../docs/plans/dark-factory-library.md`.
+
 ## The examples
 
 - `todo-store.fizz` — the capability vocabulary.
 - `todo-memory.fizz` — capabilities handed over directly (`given`).
 - `todo-database.fizz` — the same `Store` interpreted `via` `Db`.
+- `todo-peer.fizz` — the same `Store` provided by a concurrent component.
 - `todo-rules.fizz` — invariants and policies exercising all three checkers.
 - `todo-incomplete.fizz` — a deliberate hole: `Notify` is needed but never provided.
+- `todo-leak.fizz` — `App` declares `needs Store` but its body calls
+  `Notify.tell`; caught by the invocation check, not by reachability.
+- `todo-started.fizz` — a bounded `0 -> 1` transition whose invariant is
+  discharged by reachable-state exploration, not reported unverified.
+- `real/fastapi`, `real/django`, `real/agno`, `real/langgraph` — small real
+  Python samples with matching `.fizz` specs, checked by the bridge checker
+  (`racklr-test/bridge-real-test.rkt` runs all four end to end).
 
 ## Status
 
-Front end (grammar, lowering, emit) and all three checkers are implemented,
-with round-trip and checker tests green. Model checking is MVP-depth:
-invariants over uninterpreted capabilities are reported as unverified until
-capability interpretations land.
+Front end (grammar, lowering, emit) and all four checkers are implemented,
+with round-trip and checker tests green. Model checking explores reachable
+states from `:=` transitions with a depth and state bound; invariants over
+uninterpreted capabilities, and unbounded explorations that hit the bound, are
+reported as unverified. Capability interpretations have landed for the bridge
+checker: it infers host-code effect rows (Python today) and checks them against
+component `needs` for the FastAPI, Django, agno, and LangGraph examples.

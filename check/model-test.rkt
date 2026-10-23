@@ -49,3 +49,38 @@
 (define dup (load-effervesce "system M { state s: Int = 0 state s: Int = 1 }"))
 (check-false (model-check-ok? dup))
 (check-true (has-kind? (check-model dup) 'duplicate-state))
+
+;; A convergent transition discharges its invariant (no unverified note).
+(define proven
+  (load-effervesce "system M { state s: Int = 0 action Set { s := 1 } always s <= 1 }"))
+(check-true (model-check-ok? proven))
+(check-equal? (length (check-model proven)) 0)
+
+;; The shipped todo-started.fizz proves clean: a bounded flag transition.
+(check-true (model-check-ok? (load-file "todo-started.fizz")))
+(check-equal? (length (check-model (load-file "todo-started.fizz"))) 0)
+
+;; A reachable violation (decrementing below zero) is caught.
+(define overflow
+  (load-effervesce "system M { state s: Int = 3 action Dec { s := s - 1 } always s >= 0 }"))
+(check-false (model-check-ok? overflow))
+(check-true (has-kind? (check-model overflow) 'invariant-violated))
+
+;; `none` is a concrete null value: a state initialized to `none` and compared
+;; against `none` discharges.
+(define null-init
+  (load-effervesce "system M { state s: Todo = none always s == none }"))
+(check-true (model-check-ok? null-init))
+(check-equal? (length (check-model null-init)) 0)
+
+;; `%` modulo evaluates.
+(define mod-expr
+  (load-effervesce "system M { always 7 % 3 == 1 }"))
+(check-true (model-check-ok? mod-expr))
+(check-equal? (length (check-model mod-expr)) 0)
+
+;; String concatenation via `+` evaluates.
+(define str-cat
+  (load-effervesce "system M { always \"a\" + \"b\" == \"ab\" }"))
+(check-true (model-check-ok? str-cat))
+(check-equal? (length (check-model str-cat)) 0)

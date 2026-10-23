@@ -19,17 +19,13 @@
 (define (system-components sys)
   (filter uir-eff-component? (uir-eff-system-decls sys)))
 
-;; `component needs X`: does any component ask for a capability named X?
-;; Unparameterized X matches by name; a parameterized X also matches its args.
+;; `component needs X`: does any component ask for the exact capability X?
+;; Full ref identity (name + type args), matching the type checker.
 (define (component-needs? sys ref)
-  (define pname (uir-symbol-name (uir-eff-ref-name ref)))
-  (define pargs (uir-eff-ref-type-args ref))
+  (define key (ref-key ref))
   (for*/or ([c (in-list (system-components sys))]
             [n (in-list (uir-eff-component-needs c))])
-    (and (equal? pname (uir-symbol-name (uir-eff-ref-name n)))
-         (or (null? pargs)
-             (equal? (map uir-symbol-name pargs)
-                     (map uir-symbol-name (uir-eff-ref-type-args n)))))))
+    (equal? key (ref-key n))))
 
 (define (eval-pred p sys)
   (cond

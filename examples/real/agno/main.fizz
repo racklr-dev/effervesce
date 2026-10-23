@@ -1,0 +1,17 @@
+// An agno agent, described in Effervesce.
+//
+// The bridge checker infers `llm` from the `agno` namespace (an agent
+// framework that orchestrates model calls) and checks it against
+// `Agent needs Llm`.
+system AgnoAgent {
+
+  capability Llm {
+    complete(prompt: String) -> String
+  }
+
+  given Llm
+
+  component Agent needs Llm {
+    run() = complete("hi")
+  }
+}

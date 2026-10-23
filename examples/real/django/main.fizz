@@ -1,0 +1,16 @@
+// A Django store, described in Effervesce.
+//
+// The bridge checker infers `db` from `Order.objects.all()` (the `objects`
+// field is the Django ORM entry point) and checks it against `Store needs Db`.
+system DjangoStore {
+
+  capability Db {
+    query() -> Unit
+  }
+
+  given Db
+
+  component Store needs Db {
+    run() = query()
+  }
+}
