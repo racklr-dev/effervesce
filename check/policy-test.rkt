@@ -39,7 +39,8 @@
 (check-equal? (length (check-policy never-store)) 1)
 (check-equal? (policy-violation-kind (first (check-policy never-store))) 'never)
 
-;; `component needs Read` matches a component that needs Read<Config> by name.
+;; Matching is by full ref identity (name + type args), same as the type
+;; checker: a bare `component needs Read` does NOT match `Read<Config>`.
 (define named-ref
   (load-effervesce
    "system R {
@@ -48,4 +49,16 @@
       component App needs Read<Config> { run() = get() }
       must component needs Read
     }"))
-(check-true (policy-check-ok? named-ref))
+(check-equal? (length (check-policy named-ref)) 1)
+(check-equal? (policy-violation-kind (first (check-policy named-ref))) 'must)
+
+;; The exact ref matches.
+(define exact-ref
+  (load-effervesce
+   "system R2 {
+      capability Read<A> { get() -> A }
+      given Read
+      component App needs Read<Config> { run() = get() }
+      must component needs Read<Config>
+    }"))
+(check-true (policy-check-ok? exact-ref))

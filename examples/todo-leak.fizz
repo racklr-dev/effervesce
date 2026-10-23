@@ -1,0 +1,22 @@
+// A component that reaches for more than it asks for.
+// App declares `needs Store`, but its body also calls Notify.tell.
+// Reachability passes (Store is given); the invocation check catches the leak.
+system TodoLeak {
+
+  capability Store {
+    add(text: String) -> Todo
+  }
+
+  capability Notify {
+    tell(message: String) -> Unit
+  }
+
+  given Store, Notify
+
+  component App needs Store {
+    addTodo(text) = {
+      add(text);
+      tell("added " + text)
+    }
+  }
+}

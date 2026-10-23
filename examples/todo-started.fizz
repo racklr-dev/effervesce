@@ -1,0 +1,14 @@
+// The app starts at most once.
+// `progress` moves 0 -> 1 and stays there, so the model checker can explore
+// every reachable state ({0, 1}) and discharge the invariant, instead of
+// reporting it unverified.
+system TodoStarted {
+
+  state progress: Int = 0
+
+  action Start {
+    progress := 1
+  }
+
+  always progress <= 1
+}

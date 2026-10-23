@@ -1,0 +1,28 @@
+// Interpretation 3: the SAME Store effect, provided by a concurrent component
+// instead of a `via` interpreter. Database consumes Db and provides Store to
+// peers; App only needs Store, so the checker walks App -> Database -> Db ->
+// given.
+system TodoPeer {
+
+  capability Store {
+    add(text: String) -> Todo
+    done(id: String) -> Todo
+  }
+
+  capability Db {
+    insert(text: String) -> Unit
+    mark_done(id: String) -> Unit
+  }
+
+  given Db
+
+  // A peer component, not a `via` interpreter: it needs Db, provides Store.
+  component Database needs Db provides Store {
+    add(text) = insert(text)
+    done(id) = mark_done(id)
+  }
+
+  component App needs Store {
+    addTodo(text) = add(text)
+  }
+}

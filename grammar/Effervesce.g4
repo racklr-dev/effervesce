@@ -51,10 +51,17 @@ handlerDecl
     : effectRef 'via' effectRow? '{' opImpl* '}'
     ;
 
-// A component consumes an effect row and exposes typed operations. Its body
-// invokes effects; the type checker verifies every invocation is in `needs`.
+// A component consumes an effect row (`needs`) and may concurrently provide
+// capabilities to other components (`provides`). Its body invokes effects; the
+// type checker verifies every invocation is in `needs`, and that a `provides`
+// row is reachable by peers the same way `given`/`via` is.
 componentDecl
-    : 'component' ID 'needs' effectRow? '{' opImpl* '}'
+    : 'component' ID componentClause* '{' opImpl* '}'
+    ;
+
+componentClause
+    : 'needs' effectRow
+    | 'provides' effectRow
     ;
 
 opImpl
