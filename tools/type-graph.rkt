@@ -281,6 +281,21 @@
   (printf "named functions: ~a\n" fn-count)
   (printf "effectful functions: ~a\n" effectful-fn-count)
 
+  ;; R4: --verbose prints one `file::name -> effect-row` line per function,
+  ;; so a reviewer can read which functions carry which effects without a
+  ;; separate query.
+  (when verbose
+    (printf "\nPer-function effect rows (file::name -> effects):\n")
+    (for ([c (in-list (sort (hash-keys file-rows) string<?))])
+      (for ([nm (in-list (sort (hash-keys (hash-ref file-rows c)) symbol<?))])
+        (define row (hash-ref (hash-ref file-rows c) nm))
+        (define names (remove-duplicates
+                       (map effect-name-symbol (uir-effect-row-entries row))))
+        (printf "  ~a::~a -> ~a\n" c nm
+                (if (null? names)
+                    "pure"
+                    (string-join (map symbol->string names) ","))))))
+
   (printf "\nEffect algebra (name -> distinct entries):\n")
   (for ([name (in-list (sort (hash-keys by-name) symbol<?))])
     (printf "  ~a  (functions-touching: ~a, files-touching: ~a)\n"

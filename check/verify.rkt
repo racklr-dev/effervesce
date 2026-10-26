@@ -61,10 +61,17 @@
   (for/list ([i (in-list issues)])
     (cond
       [(bridge-violation? i)
+       (define sites (bridge-violation-sites i))
        (finding 'bridge 'hard 'bridge-violation
-                (format "component ~a performs uncovered effect ~a"
+                (format "component ~a performs uncovered effect ~a~a"
                         (bridge-violation-component i)
-                        (bridge-violation-effect i)))]
+                        (bridge-violation-effect i)
+                        (if (null? sites)
+                            ""
+                            (string-append " — via "
+                                           (string-join
+                                            (take sites (min 4 (length sites)))
+                                            ", ")))))]
       [(bridge-unverified? i)
        (finding 'bridge 'note 'bridge-unverified
                 (format "component ~a has unresolvable (higher-order) calls"

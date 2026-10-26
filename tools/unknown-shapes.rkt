@@ -194,7 +194,7 @@
             (λ (a b) (> (cdr a) (cdr b)))))
     (unless (null? per-op)
       (printf "  ~a (top ~a):\n" shape (min 15 (length per-op)))
-      (for ([e (in-list (take per-op 15))])
+      (for ([e (in-list (take per-op (min 15 (length per-op))))])
         (printf "      ~a  x~a\n" (car e) (cdr e)))))
 
   (printf "\n`unbound` local receivers — top names and methods (imports/globals/closures):\n")
