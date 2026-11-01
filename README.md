@@ -59,6 +59,36 @@ See `examples/config-reader.fizz` for all of it in one small system.
   effect names). A performed effect no declared need covers is a violation; an
   unresolvable call is reported unverified, not silently passed.
 
+## The effect gate (self-modification)
+
+`harness/gate.rkt` is the gate a living system redefines itself through
+(../ROADMAP.md, Phase 5). The live definition set maps each component to the UIR
+program that defines it; a proposed change is a candidate program for one
+component. The gate absorbs it (front ends plug in through `#:absorb`; the
+default takes UIR or its serialized form), infers its row with the same
+inference the bridge uses, and checks it against that component's contract:
+
+```racket
+#lang racket
+(require effervesce/harness/gate)
+
+(define gate (gate-make spec interpretations #:definitions live-programs))
+(gate-apply gate (proposal "Api" new-api-program))   ; accept | isolate
+(gate-eval  gate (proposal "Api" new-api-program))   ; live image: accept | rollback
+```
+
+- `accept` — every inferred effect is covered; the change is committed to the
+  live definition set.
+- `isolate` — an uncovered effect, an unresolvable call, or a component with no
+  contract; the change never reaches the live set and is kept in quarantine.
+- `rollback` — the change was applied to the live image first and then refused;
+  the previous definition is restored.
+
+A refusal is not a diagnostic suggestion: `decision-report` names the offending
+effect and the exact call sites behind it
+(`uncovered effect network via fetcher: fetch`), and `gate-log` records every
+decision for the durable journal. `harness/gate-test.rkt` exercises all three paths.
+
 ## Run
 
 `check()` is a Racket library; the front end lives in racklr, which must be
