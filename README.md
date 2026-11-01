@@ -124,6 +124,33 @@ A binary artifact front end (BAP) is planned so the same three verbs work on
 compiled programs, not just `.fizz` source; see
 `../docs/plans/dark-factory-library.md`.
 
+## Queries are typed traversals
+
+Both reasoning modes share one query model (`check/query.rkt` +
+`check/scope.rkt`). A question anchors at a node and scopes to the subgraph
+reachable from it along **declared** edge kinds: the link vocabulary in
+`check/graph.rkt` is declared once, and a traversal cannot walk an edge the
+vocabulary does not define.
+
+- A `hop` names one declared link-type/slot pair (`forward-hop`,
+  `backward-hop`, `slot-hop`). `follow` walks one hop, `traverse` chains hops
+  into a scope plan, `closure` iterates a hop set, and `scope-atoms` /
+  `walk-paths` return the induced subgraph or the provenance paths.
+- A `query` is data: `select` anchors it, `steps` scope it, `collect` answers
+  it. `ask` resolves a question name through the query registry, so **a new
+  question is a new query** (`register-query!`), not a new branch in a
+  dispatcher. `(ask idx '(scope-of component "App" component-needs forward))`
+  is the generic anchored-scoping form.
+- `verify` is a set of exact queries over the same merged graph: handling,
+  invocations, handler/provider completeness, policies, and bridge coverage
+  with provenance all come from traversals. The one non-walk question —
+  bounded reachable-state exploration for invariants — keeps its exact solver
+  as a query predicate.
+
+`check/scope-test.rkt` covers the traversal kernel and the extension contract;
+`check/verify-differential-test.rkt` pins the query path to the struct-level
+checkers' findings.
+
 ## The examples
 
 - `todo-store.fizz` — the capability vocabulary.
