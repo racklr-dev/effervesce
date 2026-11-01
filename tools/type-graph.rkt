@@ -229,6 +229,11 @@
                 (hash-keys comp-effects)))
   ;; Per-function effect rows (schema: fn-effect-row) — the coverage gate.
   (define fn-row-atoms (fn-effect-row-atoms file-rows))
+  ;; Capability-level graph recovered from the same inferred rows: components
+  ;; with needs/provides, capability-effect interpretations, action-writes and
+  ;; effect-touches. Without this the host projection only had the effect half
+  ;; (fn-effects / fn-effect-row) and the census reported the rest MISSING.
+  (define host-cap-atoms (host-capability-atoms host-code file-rows))
   (define touch-atoms
     (append-map (λ (c)
                   (for/list ([e (in-list
@@ -260,6 +265,7 @@
     (flatten-atoms
      (append fn-effect-atoms
              fn-row-atoms
+             host-cap-atoms
              touch-atoms
              (if with-ast?
                  (append-map (λ (c) (materialize (hash-ref host-code c)))
