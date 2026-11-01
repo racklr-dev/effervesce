@@ -88,6 +88,28 @@
   (check-equal? (node-name (first (link-out (first ce)))) (cons "Db" '()))
   (check-equal? (node-name (second (link-out (first ce)))) 'db))
 
+;; ── recovered capability graph for undeclared host components ──────
+
+(define (test-recovered-host-links)
+  ;; The spec declares Api; Worker is host-only. Recovery fills Worker's
+  ;; capability-level links from its inferred rows and leaves Api's declared
+  ;; capability graph authoritative.
+  (define progs
+    (hash "Api" host
+          "Worker" (prog (fn "job" (uir-call (dot (v "db") "execute") '())))))
+  (define g3 (system-graph+host spec progs interp))
+  (define idx3 (make-index g3))
+  (define (needs-of c)
+    (for/list ([l (in-list (index-links idx3 'component-needs))]
+               #:when (equal? (node-name (first (link-out l))) c))
+      (node-name (second (link-out l)))))
+  (check-equal? (needs-of "Api") (list (cons "Store" '())))
+  (check-equal? (needs-of "Worker") (list (cons 'db '())))
+  ;; Worker's coarse db entry is interpreted as the db effect
+  (check-true
+   (for/or ([l (in-list (index-links idx3 'capability-effect))])
+     (equal? (map node-name (link-out l)) (list (cons 'db '()) 'db)))))
+
 ;; ── link constructors, exercised directly ───────────────────────────
 
 (define (test-constructors)
@@ -104,5 +126,6 @@
   (test-spec-nodes)
   (test-spec-links)
   (test-host-links)
+  (test-recovered-host-links)
   (test-constructors)
   (displayln "All graph tests passed."))

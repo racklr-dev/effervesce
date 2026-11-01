@@ -30,7 +30,7 @@
   ;; verbs
   analyze ask verify
   ;; graph/index + AST materialization/query
-  system-graph system-graph+host make-index
+  system-graph system-graph+host host-capability-atoms make-index
   materialize calls-of
   ;; answers
   answer answer? answer-value answer-confidence answer-note certain unknown

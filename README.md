@@ -150,6 +150,29 @@ The whole thing is three verbs. `(require effervesce/library)` and:
   structured `finding` list. A `hard` finding fails verification; a `note`
   (an invariant the model checker could not discharge) does not.
 
+### Recovering the capability graph from host rows
+
+A `.fizz` system declares its capability graph; host source code has none. The
+host projection in `check/graph.rkt` therefore recovers the capability-level
+links from the inferred function rows (`check/host-graph.rkt`), using the same
+capability identity the checkers use:
+
+- a coarse entry (empty `ops`) makes the component **need** the domain
+  capability (`db`), interpreted by that effect (`capability-effect db -> db`);
+- a typed op `db<QuerySet>.read` makes it need the concrete class (`QuerySet`),
+  interpreted by the op's domain;
+- a component **provides** the capability of each class it defines, and the
+  class's method rows say which effect domains that capability entails;
+- typed ops and scopes become `effect-touches` (the receiver class or the scope
+  is the resource; a coarse entry without either names the performing component
+  as the coarsest resource), and durable attribute writes become
+  `action-writes`.
+
+Declared systems stay authoritative: recovery only fills components a `.fizz`
+spec does not declare. `tools/type-graph.rkt` reports the recovered links in
+its link-type census, so a host-only corpus run no longer shows the
+capability-level graph as empty.
+
 A binary artifact front end (BAP) is planned so the same three verbs work on
 compiled programs, not just `.fizz` source; see
 `../docs/plans/dark-factory-library.md`.

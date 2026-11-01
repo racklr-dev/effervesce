@@ -43,12 +43,15 @@
          racklr/hypergraph
          racklr/effects/infer
          racklr/effects/contract
+         "host-graph.rkt"
          "util.rkt")
 
 (provide
   ;; projection
   system-graph
   system-graph+host
+  ;; capability-level recovery from inferred host rows
+  host-capability-atoms
   ;; index
   hg-index hg-index? hg-index-by-node hg-index-by-link
   make-index
@@ -291,15 +294,27 @@
   (define prov (box (make-hash)))
   (define rows (infer-effects program #:provenance-table prov))
   (values (append-map uir-effect-row-entries (hash-values rows))
-          (unbox prov)))
+          (unbox prov)
+          rows))
 
-(define (host-atoms host-code interpretations)
+;; Capability-level atoms recovered from host rows, for components a declared
+;; system does not declare: declared capability graphs stay authoritative.
+(define (recovered-capability-atoms host-code analyses declared)
+  (define keep? (λ (cname) (not (member cname declared))))
+  (host-capability-atoms
+   (for/hash ([(cname program) (in-hash host-code)] #:when (keep? cname))
+     (values cname program))
+   (for/hash ([a (in-list analyses)] #:when (keep? (first a)))
+     (values (first a) (fifth a)))))
+
+(define (host-atoms host-code interpretations [declared-components '()])
   (define analyses
     (for/list ([cname (in-list (hash-keys host-code))])
-      (define-values (entries prov) (analyze-host-program (hash-ref host-code cname)))
+      (define-values (entries prov rows) (analyze-host-program (hash-ref host-code cname)))
       (list cname entries
             (remove-duplicates (map effect-name-symbol entries))
-            prov)))
+            prov
+            rows)))
   (append
    ;; fn-effects: component -> each inferred host effect
    (append-map (λ (a) (map (λ (e) (fn-effects-link (first a) e)) (third a)))
@@ -325,7 +340,9 @@
                              [eff (in-hash-keys h)]
                              [site (in-list (hash-ref h eff '()))])
                    (effect-site-link (first a) eff (format "~a: ~a" nm site))))
-               analyses)))
+               analyses)
+   ;; the capability-level links recovered from the same inferred rows
+   (recovered-capability-atoms host-code analyses declared-components)))
 
 ;; Host program ASTs, materialized into the queryable graph so any UIR node
 ;; (or its S-expression form) can be found and traversed.
@@ -335,10 +352,15 @@
                 (if program (materialize program) '()))
               (hash-keys host-code)))
 
+(define (declared-component-names sys)
+  (for/list ([d (in-list (uir-eff-system-decls sys))]
+             #:when (uir-eff-component? d))
+    (uir-symbol-name (uir-eff-component-name d))))
+
 (define (system-graph+host sys host-code interpretations)
   (remove-duplicates
    (append (system-graph sys)
-           (host-atoms host-code interpretations)
+           (host-atoms host-code interpretations (declared-component-names sys))
            (host-ast-atoms host-code))))
 
 ;; ── inverted index ──────────────────────────────────────────────────
