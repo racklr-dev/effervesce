@@ -18,6 +18,7 @@
 (require racklr/g4-parse
          racklr/gend-parser
          racklr/lower-python
+         (only-in racklr/lower-python/expr lower-expr)
          racklr/uir
          racket/runtime-path
          racket/file)
@@ -42,8 +43,19 @@
 
 (define py-tokenize        (dynamic-require py-parser-path 'tokenize))
 (define py-parse-file_input (dynamic-require py-parser-path 'parse-file_input))
+(define py-parse-test       (dynamic-require py-parser-path 'parse-test))
 (define py-tok-type        (dynamic-require py-parser-path 'token-type))
 (define py-tok-value       (dynamic-require py-parser-path 'token-value))
+
+;; Re-parse a single Python expression (an f-string interpolation) and lower
+;; it. Returns #f on a tokenize/parse failure so the lowerer can fall back to
+;; an opaque marker instead of crashing on a real-world interpolation.
+(define (parse-python-expr text)
+  (define tks (py-tokenize text))
+  (define res (py-parse-test tks 0))
+  (and (list? res)
+       (= (length res) 2)
+       (lower-expr (second res) py-tok-type py-tok-value)))
 
 ;; Parse (via parse-file_input) + lower. Returns #f on a tokenize or parse
 ;; failure (the lowering gap is a separate concern the scanner checks via
@@ -53,7 +65,8 @@
   (define res (py-parse-file_input tks 0))
   (and (list? res)
        (= (length res) 2)
-       (lower-python (second res) py-tok-type py-tok-value)))
+       (lower-python (second res) py-tok-type py-tok-value
+                     #:parse-expr parse-python-expr)))
 
 ;; (listof (cons component-name python-source)) -> (hash component-name uir).
 (define (python->host-code sources)
