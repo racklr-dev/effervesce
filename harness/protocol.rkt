@@ -107,6 +107,12 @@
       (hash-set base 'note (format "~a" (answer-note a)))
       base))
 
+(define (removal-response h)
+  (hash-set* (base-response h)
+             'removed #t
+             'definitions (harness-definition-names h)
+             'decls (decl-kind-counts (harness-system h))))
+
 (define (definition-response h redefined?)
   (hash-set* (base-response h)
              'redefined redefined?
@@ -143,7 +149,7 @@
     [(string=? op "remove")
      (define name (require-field req 'name string?))
      (define h* (harness-remove h name))
-     (values (definition-response h* #t) h* #f)]
+     (values (removal-response h*) h* #f)]
     [(string=? op "ask")
      (define q (question-from-json (require-field req 'question list?)))
      (values (answer-response h (harness-query h q)) h #f)]

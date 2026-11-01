@@ -142,6 +142,24 @@
   (check-equal? (ask-capabilities h2 "Worker") '())
   (check-true (check-ok? (harness-check h2))))
 
+(define duplicate-text
+  "system DuplicateStore {
+     capability Store { add(text: String) -> Unit }
+     given Store
+     component App needs Store { addTodo(text) = add(text) }
+   }")
+
+;; Current semantics, stated in harness/README.md: declarations compose, the
+;; query graph deduplicates identical atoms, and a literal duplicate is
+;; accepted rather than reported as a checker finding.
+(define (test-duplicate-declarations-are-accepted)
+  (define h (make-harness "base" base-text))
+  (define h* (harness-eval h "duplicate" duplicate-text))
+  (check-equal? (hash-ref (decl-kind-counts (harness-system h*)) 'capabilities) 2)
+  (check-equal? (hash-ref (decl-kind-counts (harness-system h*)) 'components) 2)
+  (check-equal? (ask-capabilities h* "App") '("Store"))
+  (check-true (check-ok? (harness-check h*))))
+
 (define (test-query-vocabulary)
   (define h (make-harness "base" base-text))
   (define idx (harness-index h))
@@ -165,9 +183,10 @@
 (define-runtime-path base-spec "harness/examples/live-base.fizz")
 
 ;; The child must resolve racklr/ and effervesce/ from this checkout, not
-;; from whatever the user-level package links happen to point at.
+;; from whatever the user-level package links happen to point at. The
+;; checkout root is the parent of effervesce/.
 (define (child-environment)
-  (define here (simplify-path (build-path (path->complete-path harness-main) 'up 'up)))
+  (define here (simplify-path (build-path (path->complete-path harness-main) 'up 'up 'up)))
   (define env (environment-variables-copy (current-environment-variables)))
   (define existing (or (getenv "PLTCOLLECTS") ""))
   (environment-variables-set!
@@ -188,13 +207,14 @@
   (displayln (jsexpr->string req) out)
   (flush-output out))
 
-(define (stop-live-process child-out child-in control)
+(define (stop-live-process child-out child-in child-err control)
   (with-handlers ([exn:fail? void])
     (if (eq? (control 'status) 'running)
         (control 'kill)
         (void)))
   (with-handlers ([exn:fail? void]) (close-input-port child-out))
-  (with-handlers ([exn:fail? void]) (close-output-port child-in)))
+  (with-handlers ([exn:fail? void]) (close-output-port child-in))
+  (with-handlers ([exn:fail? void]) (close-input-port child-err)))
 
 ;; Start the real process and answer the ready line.
 (define (start-live-process)
@@ -207,12 +227,20 @@
   (define child-out (list-ref proc 0))
   (define child-in (list-ref proc 1))
   (define child-pid (list-ref proc 2))
+  (define child-err (list-ref proc 3))
   (define control (list-ref proc 4))
+  ;; The child writes parser-generation warnings to stderr. Drain it in the
+  ;; background so a fuller stderr pipe can never block the smoke test.
+  (thread (λ ()
+            (with-handlers ([exn:fail? void])
+              (let loop ()
+                (define chunk (read-bytes 4096 child-err))
+                (if (eof-object? chunk) (void) (loop))))))
   (define ready (read-response child-out))
-  (values child-out child-in child-pid control ready))
+  (values child-out child-in child-pid child-err control ready))
 
 (define (test-live-process-eval-then-query)
-  (define-values (child-out child-in child-pid control ready)
+  (define-values (child-out child-in child-pid child-err control ready)
     (start-live-process))
   (dynamic-wind
    void
@@ -283,7 +311,7 @@
      (check-equal? (hash-ref bye 'event) "shutdown")
      (define end (sync/timeout 30 (read-line-evt child-out 'any)))
      (check-true (eof-object? end)))
-   (λ () (stop-live-process child-out child-in control))))
+   (λ () (stop-live-process child-out child-in child-err control))))
 
 (module+ main
   (test-make-harness-loads-base)
@@ -291,6 +319,7 @@
   (test-redefinition-is-observable)
   (test-invalid-definition-is-atomic)
   (test-remove-drops-a-definition)
+  (test-duplicate-declarations-are-accepted)
   (test-query-vocabulary)
   (test-bad-request-does-not-end-the-process)
   (test-live-process-eval-then-query)

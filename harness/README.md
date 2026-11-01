@@ -84,6 +84,12 @@ cd effervesce
 racket harness-test.rkt
 ```
 
+If Racket's user-level package links point at a different checkout, run it
+with this checkout's root prepended so the test process itself resolves this
+tree: `PLTCOLLECTS=<repo-root>: racket harness-test.rkt`. The spawned child
+process always resolves collections from this checkout's root, whatever the
+outer environment is.
+
 The suite has two halves. The in-process half covers the harness state, the
 JSON protocol, and the atomicity of a rejected definition. The smoke half
 starts the real `main.rkt` process, evaluates a definition, redefines it,
@@ -103,10 +109,12 @@ This is P5.1 only: the process and the eval surface. Deliberately absent:
   did.
 - **No host artifacts.** `verify` runs the bridge with empty host code and an
   empty interpretation table, so it only sees the `.fizz` description.
-- Definitions compose at declaration level, which means two definitions that
-  declare the same component or capability are legal to load and are reported
-  by the checkers rather than silently merged. Named replacement is the
-  intended way to change one.
+- Definitions compose at declaration level, so repeating a declaration in a
+  second definition is accepted: the query graph deduplicates identical
+  atoms, so queries do not double-count them (the raw declaration census
+  still shows both), and a conflicting redeclaration is not yet reported as
+  a checker finding. Named replacement (`eval` with an existing name) is the
+  intended way to change a definition.
 
 ## Files
 
