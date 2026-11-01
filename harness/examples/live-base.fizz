@@ -1,0 +1,17 @@
+// Base system for the live-image smoke test.
+//
+// `App` needs `Store`, which the environment gives directly, so the initial
+// system checks clean. The harness can then redefine the live system by
+// evaluating extra `.fizz` definitions into the running process.
+system LiveBase {
+
+  capability Store {
+    add(text: String) -> Unit
+  }
+
+  given Store
+
+  component App needs Store {
+    addTodo(text) = add(text)
+  }
+}
