@@ -14,12 +14,15 @@
 ;;
 ;; `ask` and `verify` are re-exported from check/query.rkt and
 ;; check/verify.rkt so the library is the single entry point for both
-;; reasoning modes.
+;; reasoning modes. The query/traversal vocabulary is re-exported too: a
+;; caller adds a question by registering a query (anchor + declared edge
+;; kinds + collector), not by extending the dispatcher.
 
 (require racklr/uir
          racklr/hypergraph
          "load.rkt"
          "check/graph.rkt"
+         "check/scope.rkt"
          "check/query.rkt"
          (rename-in "check/verify.rkt" [verify check-verify]))
 
@@ -31,6 +34,12 @@
   materialize calls-of
   ;; answers
   answer answer? answer-value answer-confidence answer-note certain unknown
+  ;; queries (a new question is a new query) + contextual scoping
+  query query? query-name query-select query-steps query-collect query-host?
+  query-registry register-query! find-query run-query single-step no-steps
+  hop hop? hop-type hop-from hop-to forward-hop backward-hop slot-hop
+  edge-shapes edge-declared? follow traverse closure scope-nodes scope-atoms
+  walk-paths
   ;; findings
   finding finding? finding-checker finding-severity finding-kind finding-message
   verify-ok? verify-report

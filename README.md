@@ -59,6 +59,36 @@ See `examples/config-reader.fizz` for all of it in one small system.
   effect names). A performed effect no declared need covers is a violation; an
   unresolvable call is reported unverified, not silently passed.
 
+## The effect gate (self-modification)
+
+`harness/gate.rkt` is the gate a living system redefines itself through
+(../ROADMAP.md, Phase 5). The live definition set maps each component to the UIR
+program that defines it; a proposed change is a candidate program for one
+component. The gate absorbs it (front ends plug in through `#:absorb`; the
+default takes UIR or its serialized form), infers its row with the same
+inference the bridge uses, and checks it against that component's contract:
+
+```racket
+#lang racket
+(require effervesce/harness/gate)
+
+(define gate (gate-make spec interpretations #:definitions live-programs))
+(gate-apply gate (proposal "Api" new-api-program))   ; accept | isolate
+(gate-eval  gate (proposal "Api" new-api-program))   ; live image: accept | rollback
+```
+
+- `accept` — every inferred effect is covered; the change is committed to the
+  live definition set.
+- `isolate` — an uncovered effect, an unresolvable call, or a component with no
+  contract; the change never reaches the live set and is kept in quarantine.
+- `rollback` — the change was applied to the live image first and then refused;
+  the previous definition is restored.
+
+A refusal is not a diagnostic suggestion: `decision-report` names the offending
+effect and the exact call sites behind it
+(`uncovered effect network via fetcher: fetch`), and `gate-log` records every
+decision for the durable journal. `harness/gate-test.rkt` exercises all three paths.
+
 ## Run
 
 `check()` is a Racket library; the front end lives in racklr, which must be
@@ -123,6 +153,33 @@ The whole thing is three verbs. `(require effervesce/library)` and:
 A binary artifact front end (BAP) is planned so the same three verbs work on
 compiled programs, not just `.fizz` source; see
 `../docs/plans/dark-factory-library.md`.
+
+## Queries are typed traversals
+
+Both reasoning modes share one query model (`check/query.rkt` +
+`check/scope.rkt`). A question anchors at a node and scopes to the subgraph
+reachable from it along **declared** edge kinds: the link vocabulary in
+`check/graph.rkt` is declared once, and a traversal cannot walk an edge the
+vocabulary does not define.
+
+- A `hop` names one declared link-type/slot pair (`forward-hop`,
+  `backward-hop`, `slot-hop`). `follow` walks one hop, `traverse` chains hops
+  into a scope plan, `closure` iterates a hop set, and `scope-atoms` /
+  `walk-paths` return the induced subgraph or the provenance paths.
+- A `query` is data: `select` anchors it, `steps` scope it, `collect` answers
+  it. `ask` resolves a question name through the query registry, so **a new
+  question is a new query** (`register-query!`), not a new branch in a
+  dispatcher. `(ask idx '(scope-of component "App" component-needs forward))`
+  is the generic anchored-scoping form.
+- `verify` is a set of exact queries over the same merged graph: handling,
+  invocations, handler/provider completeness, policies, and bridge coverage
+  with provenance all come from traversals. The one non-walk question —
+  bounded reachable-state exploration for invariants — keeps its exact solver
+  as a query predicate.
+
+`check/scope-test.rkt` covers the traversal kernel and the extension contract;
+`check/verify-differential-test.rkt` pins the query path to the struct-level
+checkers' findings.
 
 ## The examples
 
