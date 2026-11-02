@@ -38,6 +38,25 @@
         [else (void)])))
   (reverse out))
 
+;; Canonical dotted module name of a scanned root directory. Walk up past
+;; every __init__.py-bearing ancestor (each is one package component) and join
+;; the names, so scanning `django/django/core` yields "django.core" — matching
+;; the import sources in the scanned files and the effect-tag config rules —
+;; instead of the bare basename "core" (which matched nothing). A root with no
+;; package ancestor falls back to its basename.
+(define (package-root-name root-dir)
+  (define comps '())
+  (let loop ([d root-dir])
+    (define-values (base name dir?) (split-path d))
+    (cond
+      [(and base (file-exists? (build-path d "__init__.py")))
+       (set! comps (cons (path->string name) comps))
+       (loop base)]
+      [else
+       (if (null? comps)
+           (let-values ([(b n dir?) (split-path root-dir)]) (path->string n))
+           (string-join comps "."))])))
+
 ;; ── UIR effect entry -> hypergraph effect-entry hyperedge ────────────
 
 (define (entry->hg e)
@@ -105,12 +124,13 @@
     (eprintf "usage: type-graph.rkt <dir> [<dir> ...] [--verbose] [--ast] [--dump]\n")
     (exit 1))
 
-  ;; Each root is (name . dir); name is the top-level package name (the dir's
-  ;; basename) used to build dotted module paths.
+  ;; Each root is (name . dir); name is the canonical dotted package name used
+  ;; to build dotted module paths (package-root-name walks up the __init__.py
+  ;; chain so a subpackage root keeps its full import prefix).
   (define roots
     (for/list ([dir (in-list dirs)])
       (define root-dir (simplify-path (path->complete-path dir) #f))
-      (cons (path->string (file-name-from-path root-dir)) root-dir)))
+      (cons (package-root-name root-dir) root-dir)))
 
   (define files
     (sort (apply append (map (λ (r) (find-py-files (cdr r))) roots))
@@ -209,6 +229,11 @@
                 (hash-keys comp-effects)))
   ;; Per-function effect rows (schema: fn-effect-row) — the coverage gate.
   (define fn-row-atoms (fn-effect-row-atoms file-rows))
+  ;; Capability-level graph recovered from the same inferred rows: components
+  ;; with needs/provides, capability-effect interpretations, action-writes and
+  ;; effect-touches. Without this the host projection only had the effect half
+  ;; (fn-effects / fn-effect-row) and the census reported the rest MISSING.
+  (define host-cap-atoms (host-capability-atoms host-code file-rows))
   (define touch-atoms
     (append-map (λ (c)
                   (for/list ([e (in-list
@@ -240,6 +265,7 @@
     (flatten-atoms
      (append fn-effect-atoms
              fn-row-atoms
+             host-cap-atoms
              touch-atoms
              (if with-ast?
                  (append-map (λ (c) (materialize (hash-ref host-code c)))
@@ -260,6 +286,21 @@
     (for ([f (in-list failed)]) (printf "  FAIL ~a\n" f)))
   (printf "named functions: ~a\n" fn-count)
   (printf "effectful functions: ~a\n" effectful-fn-count)
+
+  ;; R4: --verbose prints one `file::name -> effect-row` line per function,
+  ;; so a reviewer can read which functions carry which effects without a
+  ;; separate query.
+  (when verbose
+    (printf "\nPer-function effect rows (file::name -> effects):\n")
+    (for ([c (in-list (sort (hash-keys file-rows) string<?))])
+      (for ([nm (in-list (sort (hash-keys (hash-ref file-rows c)) symbol<?))])
+        (define row (hash-ref (hash-ref file-rows c) nm))
+        (define names (remove-duplicates
+                       (map effect-name-symbol (uir-effect-row-entries row))))
+        (printf "  ~a::~a -> ~a\n" c nm
+                (if (null? names)
+                    "pure"
+                    (string-join (map symbol->string names) ","))))))
 
   (printf "\nEffect algebra (name -> distinct entries):\n")
   (for ([name (in-list (sort (hash-keys by-name) symbol<?))])
