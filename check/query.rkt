@@ -65,8 +65,10 @@
 (define query-registry (make-hasheq))
 
 (define (register-query! q)
+  ;; Return void, not the query: a module-level registration must not echo its
+  ;; value when the live image loads this module into a fresh namespace.
   (hash-set! query-registry (query-name q) q)
-  q)
+  (void))
 
 (define (find-query name)
   (hash-ref query-registry name #f))
